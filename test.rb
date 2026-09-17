@@ -1,31 +1,10 @@
 require_relative "./wrap_stream"
 require_relative "./scrollbar"
+require_relative "./patches"
 require_relative "./selectable"
 require_relative "./text"
 require_relative "./panel"
 require_relative "./input"
-
-module Hokusai
-  class Keyboard
-    attr_accessor :shift, :control, :super, :alt
-    attr_reader :keys, :pressed, :released, :down
-
-    # Public: Is the pressed key printable?
-    # 
-    # Returns boolean
-    def printable?
-      [
-        :space, :tab, :apostrophe, :comma, :minus, :period,
-        :slash, :right_bracket, :left_bracket, :grave,
-        :zero, :one, :two, :three, :four, :five, :six, 
-        :seven, :eight, :nine, :semicolon, 
-        :a, :b, :c, :d, :e, :f, :g, :h,
-        :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, 
-        :s, :t, :u, :v, :w, :x, :y, :z,
-      ].include?(symbol)
-    end
-  end
-end
 
 class Test < Hokusai::Block
   style <<-EOF
@@ -49,7 +28,6 @@ class Test < Hokusai::Block
   template <<-EOF
   [template]
     hblock { ...bg }
-      input { ...text :model="content" }
       panel { @keypress="on_keypress" }
         selectable
           text { ...text :content="other" @copy="handle_copy" :copy_text="copy" }
