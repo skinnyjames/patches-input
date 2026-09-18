@@ -19,9 +19,7 @@ module Hokusai
         when :right
           self.cursor_index += times
 
-          p [cursor_index, positions]
           if cursor_index == positions.last
-            p ["well"]
             self.positions = cursor_index..cursor_index
           elsif selecting && !positions.nil? && cursor_index <= positions.last
             self.positions = (positions.first + 1)...positions.last
@@ -31,21 +29,14 @@ module Hokusai
 
         when :left
           if selecting && !positions.nil? && cursor_index >= positions.last
-            p ["wtf"]
-
             if positions.last - 1 < positions.first
-              p ["whooooo", positions]
               self.positions = positions.last - 1...positions.first
-              self.offset -= 1
               @moved_left = true
             else
-              p ["yeahhhh", positions]
               self.positions = positions.first...positions.last - 1
             end
           elsif selecting
-            p ["oof!", cursor_index, positions]
             self.positions = cursor_index...positions.last
-            # self.offset = -1
           end
           self.cursor_index -= times unless cursor_index == -1
 
@@ -402,17 +393,18 @@ module Hokusai::Blocks
       # end
   
       return unless timer.elapsed(0.2)
-      if nav_target
-        case nav_target
-        when :left
-          p ["left nav"]
-          selection.pos.move(:left, true)
-        when :right
-          selection.pos.move(:right, true)
-        when :up
-        when :down
-        end
-      end
+      selection.action =  nav_target
+      #   case nav_target
+      #   when :left
+      #     selection.action = :left
+      #     # selection.pos.move(:left, true)
+      #   when :right
+      #     selection.action = :right
+      #     # selection.pos.move(:right, true)
+      #   when :up
+      #   when :down
+      #   end
+      # end
       
       if page_target
         x = event.input.mouse.pos.x
@@ -469,7 +461,6 @@ module Hokusai::Blocks
 
     def on_mouseup(event)
       if event.left.released && !shift
-        p ["mouseup"]
         # selection.pos!
         # selection.geom.click_pos = nil
       end
@@ -483,7 +474,7 @@ module Hokusai::Blocks
         # by the time we switch to pos, positions should already be populated.
         selection.pos!
         selection.pos.freeze!
-      elsif event.left.down
+      elsif event.left.down && !event.input.keyboard.shift
         selection.geom.stop(event.pos.x, event.pos.y)
       end
     end

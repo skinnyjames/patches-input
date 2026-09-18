@@ -322,7 +322,7 @@ module Hokusai::Util
           # if we are currently selecting by geometry, we need to populate the widths
           # cursor, and cursor_index, so that we can switch over.
           elsif selector.geom? && selector.geom.selected(tx, ty, w, token.height)
-            if (selector.geom.left? || selector.geom.up?)
+            if (selector.geom.up?)
               cursor ||= [tx, ty, 0.5, token.height]
               pcursor ||= token.positions[i]
             else
