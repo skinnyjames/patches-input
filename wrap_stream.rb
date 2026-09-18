@@ -224,6 +224,190 @@ module Hokusai::Util
       wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
     end
 
+    # Populate the selection positions from geometry
+    def selected_area_for_tokens(target_tokens, selector, padding: Hokusai::Padding.default)
+      return if selector.nil? || !selector.selecting?
+
+      x = nil
+      tw = 0.0
+      cy = nil
+      cursor = nil
+      pcursor = nil
+      position_buffer = []
+      required_range = target_tokens.first.positions.first..target_tokens.last.positions.last
+            # each token should represent a wrapped line of text
+      # each token has a array of widths that repesent each char width in that line
+      tokens.each do |token|
+        next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect || selector.action == :all
+
+        tx = token.x + padding.left
+        ty = token.y + padding.top
+
+        if token.y != cy
+          x = nil
+          cy = token.y
+          tw = 0.0
+        end
+        
+        token.widths.each_with_index do |w, i|
+          if selector.pos.cursor_index
+            case selector.action
+            when :word
+              if (selector.pos.cursor_index == token.positions[i])
+                min = i
+                max = i
+
+                loop do
+                  # go backward until word boundary
+                  break if min <= 0
+                  break if token.text[min - 1].nil?
+                  break if token.text[min - 1] =~ /[^A-Za-z0-9]/
+                  min -= 1
+                end
+
+                loop do
+                  break if token.text[max + 1].nil?
+                  break if token.text[max + 1] =~ /[^A-Za-z0-9]/
+                  max += 1
+                end
+
+                position_buffer = token.positions[min..max]
+                ay = cy + padding.top - selector.offset_y
+                sumx = token.x + padding.left
+                if min > 1
+                  sumx += token.widths[0...min].reduce(&:+)
+                end
+                sumwidth = token.widths[min..max].reduce(&:+)
+
+                yield Hokusai::Rect.new(sumx, ay, sumwidth, token.height)
+
+                # selector.pos!
+                selector.pos.cursor_index = token.positions[max]
+                selector.cursor = [sumx + sumwidth, cy + padding.top, 0.5, token.height]
+                selector.geom.click_pos = nil
+                selector.pos.positions = position_buffer.first..position_buffer.last if position_buffer 
+                selector.pos.freeze!
+                selector.action = nil
+              end
+            when :line
+              if selector.pos.cursor_index == token.positions[i] #|| selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
+                # line selected
+                position_buffer = token.positions.dup
+                ay = cy + padding.top - selector.offset_y
+                sum = token.widths.sum
+                yield Hokusai::Rect.new(token.x + padding.left, ay, sum, token.height)
+
+                # selector.pos!
+                selector.pos.cursor_index = token.positions.last
+                selector.cursor = [token.x + padding.left + sum, cy + padding.top, 0.5, token.height]
+                selector.pos.positions = position_buffer.first..position_buffer.last if position_buffer
+                selector.geom.click_pos = nil
+                selector.pos.freeze!
+                selector.action = nil
+              end
+            end
+          end
+
+          if selector.action == :all
+            cursor = [tx + w, ty, 0.5, token.height]
+            pcursor = token.positions[i]
+            
+            position_buffer << token.positions[i]
+
+            if x.nil?
+              x = tx
+            end
+
+            tw += w
+          # if we are currently selecting by geometry, we need to populate the widths
+          # cursor, and cursor_index, so that we can switch over.
+          elsif selector.geom? && selector.geom.selected(tx, ty, w, token.height)
+            if (selector.geom.left? || selector.geom.up?)
+              cursor ||= [tx, ty, 0.5, token.height]
+              pcursor ||= token.positions[i]
+            else
+              cursor = [tx + w, ty, 0.5, token.height]
+              pcursor = token.positions[i]
+            end
+
+            position_buffer << token.positions[i]
+
+            if x.nil?
+              x = tx
+            end
+
+            tw += w
+          # we are now selecting by position.
+          elsif selector.pos? && selector.pos.selected(token.positions[i])
+            if selector.pos.cursor_index == selector.pos.positions.first
+              cursor ||= [tx, ty, 0.5, token.height]
+              pcursor ||= token.positions[i]
+            elsif selector.pos.cursor_index == selector.pos.positions.last
+              cursor = [tx + w, ty, 0.5, token.height]
+              pcursor = token.positions[i]
+            elsif selector.pos.cursor_index + 1 == token.positions[i]
+              cursor = [tx, ty, 0.5, token.height]
+              pcursor = token.positions[i] - 1
+            end
+
+            # print token.text[i]
+            position_buffer << token.positions[i]
+
+            if x.nil?
+              x = tx
+            end
+
+            tw += w
+
+          # cursor handling when there is no selection
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
+            # p ["set cursor"]
+            cursor = [tx, ty, 0.5, token.height]
+            pcursor = selector.pos.cursor_index
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
+            # p ["set cursor", selector.pos.cursor_index]
+            cursor = [tx + w, ty, 0.5, token.height]
+            pcursor = selector.pos.cursor_index
+            #selector.pos.offset += 1
+          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.geom.clicked(tx + (w/2.0), ty, (w/2.0), token.height)
+            cursor ||= [tx + w, ty, 0.5, token.height]
+            pcursor = token.positions[i]
+          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.geom.clicked(tx, ty, (w / 2), token.height)
+            cursor ||= [tx, ty, 0.5, token.height]
+            if token.positions[i]
+              pcursor ||= token.positions[i] - 1
+            else
+              pcursor ||= token.positions[i]
+            end
+          # elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(ty, token.height)
+            # pcursor = token.positions[i] - 1
+          end
+
+          # move the current x forward
+          tx += w
+        end
+
+        if !x.nil?
+          # if we have a selection, yield it.
+          ay = cy + padding.top - selector.offset_y
+          yield Hokusai::Rect.new(x, ay, tw, token.height)
+
+          tw = 0.0
+        end
+      end
+
+      # we have cursors
+      if pcursor
+        selector.pos.cursor_index = pcursor
+        selector.cursor = cursor
+      end
+
+      # we have a position array
+      if !position_buffer.empty? && !selector.pos.frozen?
+        selector.pos.concat position_buffer 
+      end
+    end
+
     # Public: Gets the area coordinates for a selection
     #         to draw a text selection background.
     # 
@@ -234,7 +418,7 @@ module Hokusai::Util
     #           padding - a Hokusai::Padding object
     #           
     # Returns Hokusai::Util::WrapCachePayload
-    def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
+    def old_selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
       return if selector.nil? || !selector.selecting?
 
       if selector.action && !selector.pos.cursor_index
@@ -382,7 +566,7 @@ module Hokusai::Util
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
             cursor = [tx, sy, 0.5, token.height]
             pcursor = token.positions[i] - 1
-            selector.geom.start(tx, sy)
+            # selector.geom.start(tx, sy)
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
             cursor = [tx + w, sy, 0.5, token.height]
             pcursor = selector.pos.cursor_index

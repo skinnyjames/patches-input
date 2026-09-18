@@ -74,9 +74,7 @@ module Hokusai::Blocks
         y = start_top(canvas)
 
         stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
-          if string == "\n"
-            [size, size]
-          elsif w = user_font.measure_char(string, size)
+          if w = user_font.measure_char(string, size)
             [w, size]
           else
             [user_font.measure(string, size).first, size]
@@ -149,7 +147,7 @@ module Hokusai::Blocks
       if selection
         # set up for offset tracking
         selection.offset_y = offset
-        if animate_selection && selection.geom.active?
+        if animate_selection && selection.geom?
           shader_begin do |command|
             command.fragment_shader = fshader
             command.uniforms = {
@@ -160,14 +158,14 @@ module Hokusai::Blocks
           end
         end
 
-        copied = token_cache.selected_area_for_tokens(tokens, selection, copy: copying || copy_text, padding: padding) do |rect|
-          y = rect.y + selection.diff
-          rect(rect.x, y, rect.width, rect.height) do |command|
+        token_cache.selected_area_for_tokens(tokens, selection, padding: padding) do |rect|
+          # y = rect.y + selection.diff
+          rect(rect.x, rect.y, rect.width, rect.height) do |command|
             command.color = selection_color
           end
         end
 
-        emit("selected", copied) unless copied.nil?
+        # emit("selected", copied) unless copied.nil?
 
         if copy_text
           copystuff = token_cache.selected_text(content, selection)
@@ -176,7 +174,7 @@ module Hokusai::Blocks
           emit("copy", copystuff)
         end
 
-        if animate_selection && selection.geom.active?
+        if animate_selection && selection.geom?
           shader_end
         end
       end
