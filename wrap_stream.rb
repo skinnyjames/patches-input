@@ -226,17 +226,19 @@ module Hokusai::Util
 
     # Populate the selection positions from geometry
     def selected_area_for_tokens(target_tokens, selector, padding: Hokusai::Padding.default)
-      return if selector.nil? || !selector.selecting?
+      return if selector.nil? || !selector.selecting? || target_tokens.size.zero?
 
       x = nil
       tw = 0.0
       cy = nil
       cursor = nil
       pcursor = nil
-      position_buffer = []
+      position_buffer = nil
       required_range = target_tokens.first.positions.first..target_tokens.last.positions.last
-            # each token should represent a wrapped line of text
+
+      # each token should represent a wrapped line of text
       # each token has a array of widths that repesent each char width in that line
+
       tokens.each do |token|
         next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect || selector.action == :all
 
@@ -271,7 +273,7 @@ module Hokusai::Util
                   max += 1
                 end
 
-                position_buffer = token.positions[min..max]
+                position_buffer = token.positions[min]..token.positions[max]
                 ay = cy + padding.top - selector.offset_y
                 sumx = token.x + padding.left
                 if min > 1
@@ -292,7 +294,7 @@ module Hokusai::Util
             when :line
               if selector.pos.cursor_index == token.positions[i] #|| selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
                 # line selected
-                position_buffer = token.positions.dup
+                position_buffer = token.positions.first..token.positions.last
                 ay = cy + padding.top - selector.offset_y
                 sum = token.widths.sum
                 yield Hokusai::Rect.new(token.x + padding.left, ay, sum, token.height)
@@ -308,12 +310,17 @@ module Hokusai::Util
             end
           end
 
+          # if selector.action == :left && selector.selected(last_token_index + 1)
           if selector.action == :all
             cursor = [tx + w, ty, 0.5, token.height]
             pcursor = token.positions[i]
             
-            position_buffer << token.positions[i]
-
+            if position_buffer.nil? 
+              position_buffer = token.positions[i]..token.positions[i]
+            else
+              position_buffer = position_buffer.first..token.positions[i]
+            end
+  
             if x.nil?
               x = tx
             end
@@ -330,7 +337,11 @@ module Hokusai::Util
               pcursor = token.positions[i]
             end
 
-            position_buffer << token.positions[i]
+            if position_buffer.nil? 
+              position_buffer = token.positions[i]..token.positions[i]
+            else
+              position_buffer = position_buffer.first..token.positions[i]
+            end
 
             if x.nil?
               x = tx
@@ -350,8 +361,11 @@ module Hokusai::Util
               pcursor = token.positions[i] - 1
             end
 
-            # print token.text[i]
-            position_buffer << token.positions[i]
+            if position_buffer.nil? 
+              position_buffer = token.positions[i]..token.positions[i]
+            else
+              position_buffer = position_buffer.first..token.positions[i]
+            end
 
             if x.nil?
               x = tx
@@ -386,7 +400,7 @@ module Hokusai::Util
           # move the current x forward
           tx += w
         end
-
+        
         if !x.nil?
           # if we have a selection, yield it.
           ay = cy + padding.top - selector.offset_y
@@ -403,7 +417,7 @@ module Hokusai::Util
       end
 
       # we have a position array
-      if !position_buffer.empty? && !selector.pos.frozen?
+      if !position_buffer.nil? && !selector.pos.frozen?
         selector.pos.concat position_buffer 
       end
     end
@@ -513,7 +527,7 @@ module Hokusai::Util
             cursor = [tx + w, sy, 0.5, token.height]
             selector.geom.start(tx, sy)
             pcursor = token.positions[i]
-            position_buffer << token.positions[i]
+            position_buffer = position_buffer.first..token.positions[i]
 
             if x.nil?
               x = tx
@@ -530,7 +544,7 @@ module Hokusai::Util
             end
 
             # print "#{token.text[i]}"
-            position_buffer << token.positions[i]
+            position_buffer = position_buffer.first..token.positions[i]
 
             if x.nil?
               x = tx
@@ -549,7 +563,7 @@ module Hokusai::Util
               pcursor = token.positions[i] - 1
             end
 
-            position_buffer << token.positions[i]
+            position_buffer = position_buffer.first..token.positions[i]
 
             if copy
               copy_buffer += token.text[i]
@@ -670,7 +684,7 @@ module Hokusai::Util
   #   stream.y
   #
   class WrapStream
-    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
+    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :offset_pos, :current_position, :positions, :on_text_cb
     attr_reader :width, :origin_x, :on_text_cb
 
     # Public: constructor for WrapStream
@@ -679,7 +693,7 @@ module Hokusai::Util
     # origin_x - where the x value starts (default: 0.0)
     # origin_y - where the y value starts (default: 0.0)
     # block - a callback to measure a given string.  Callback must return an array containing the width and height of the string
-    def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
+    def initialize(width, origin_x = 0.0, origin_y = 0.0, origin_offset = 0, &measure)
       @width = width            # the width of the container for this wrap
       @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
       @on_text_cb = ->(_) {}    # a callback that receives a wrapped token for a given line.  (takes a Hokusai::Util::Wrapped paramter)
@@ -691,6 +705,7 @@ module Hokusai::Util
       @stack = []               # a stack storing buffer offsets with their respective token payloads.
       @buffer = ""              # the current buffer that the stack represents.
       
+      @offset_pos = origin_offset
       @current_position = 0     # the current char index
       @positions = []           # a stack of char positions, used for editing
       @widths = []              # a stack of char widths, used later in selection
@@ -716,7 +731,7 @@ module Hokusai::Util
       # char-by-char processing.
       while offset < size
         char = text[offset]
-        self.current_position = offset
+        self.current_position = offset_pos
 
         w, h = measure(char, extra)
 
@@ -732,6 +747,7 @@ module Hokusai::Util
           self.y += h
           self.x = origin_x
           offset += 1
+          self.offset_pos += 1
 
           next
         end
@@ -820,6 +836,7 @@ module Hokusai::Util
         end
 
         offset += 1
+        self.offset_pos += 1
       end
     end
 

@@ -3,6 +3,7 @@ require_relative "./scrollbar"
 require_relative "./patches"
 require_relative "./selectable"
 require_relative "./text"
+require_relative "./selectable_text"
 require_relative "./panel"
 require_relative "./input"
 
@@ -29,8 +30,9 @@ class Test < Hokusai::Block
   [template]
     hblock { ...bg }
       panel { @keypress="on_keypress" }
-        selectable
+        selectable { :vertical="false" :geometry_mode="false" }
           text { ...text :content="other" @copy="handle_copy" :copy_text="copy" }
+
   EOF
 
   def on_keypress(event)
@@ -40,7 +42,6 @@ class Test < Hokusai::Block
   end
 
   def handle_copy(text)
-    p text
     self.copy = false
   end
 
@@ -49,7 +50,10 @@ class Test < Hokusai::Block
   end
 
   def other
-    @other ||= File.read("panel.rb")
+    @other ||= begin
+      f = File.read("panel.rb")# * 40
+      f
+    end
   end
 
   attr_accessor :copy
@@ -83,6 +87,7 @@ Hokusai::Backend.run(Test) do |config|
   config.height = 500
   config.title = "input test"
   config.event_waiting = false
+  config.draw_fps = true
   # config.accessibility do |accessibility_config|
   #   accessibility_config.model_path = "assets/models/ggml-tiny.bin"
   # end
