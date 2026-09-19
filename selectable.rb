@@ -67,10 +67,9 @@ module Hokusai
       #
       # Returns nothing
       def concat(arr)
-        return if arr.reject(&:nil?).empty?
+        return if arr.nil?
 
         if @positions.nil?
-          p ["wtffffff"]
           @positions = arr.first..arr.last
 
           return
@@ -197,11 +196,7 @@ module Hokusai
         self.original_direction ||= up? ? :up : :down
 
         if (up? && @direction == :down) || (down? && @direction == :up)
-          p ["changed irection = true", self, start_y, stop_y]
           @changed_direction = true
-        else
-          # p ["changed direction = false"]
-          # @changed_direction = false
         end
 
         @direction = up? ? :up : :down
@@ -262,7 +257,6 @@ module Hokusai
         y = ty - parent.offset_y
         sy = @start_y - parent.offset_y
         ey = @stop_y - parent.offset_y
-
         sx = @start_x
         ex = @stop_x
 
@@ -295,23 +289,24 @@ module Hokusai
           ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
             ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
         )
-
         a
-      end
+      end 
     end
 
     class Selection
       attr_reader :pos, :geom
-      attr_accessor :offset_y, :offset_x, :cursor, :action, :state
+      attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, :action, :state, :use_focus
 
       def initialize
         @pos = PosSelection.new(self)
         @geom = GeomSelection.new(self)
         @offset_y = 0.0
         @offset_x = 0.0
+        @offset_pos = 0
         @cursor = nil
         @action = nil
         @state = :geom
+        @use_focus = false
       end
 
       def cursor=(arr)
@@ -372,6 +367,7 @@ module Hokusai::Blocks
     template <<~EOF
       [template]
         dynamic {
+          :vertical="vertical"
           @keypress="on_keypress"
           @keyup="on_keyup"
           @keydown="on_keydown"
@@ -382,6 +378,7 @@ module Hokusai::Blocks
         }
           slot
           cursor {
+            width="0"
             height="0"
             :color="cursor_color"
             :x="cursor_x"
@@ -397,8 +394,11 @@ module Hokusai::Blocks
     )
 
     computed :cursor_color, default: [255,22,22], convert: Hokusai::Color
+    computed :vertical, default: true
+    computed :focus_mode, default: true
 
     provide :selection, :selection
+    inject :panel_control
 
     attr_reader :selection, :timer
     attr_accessor :shift, :nav_target, :page_target
@@ -415,6 +415,7 @@ module Hokusai::Blocks
       @shift = false
       @nav_target = nil
       @page_target = nil
+      @top = nil
 
       super
     end
@@ -472,7 +473,22 @@ module Hokusai::Blocks
         when :right
           selection.pos.move(:right, true)
         when :up
+          p [panel_control.offset, selection.geom.stop_y]
+          if selection.geom.stop_y - panel_control.offset < 70
+            navheight = panel_control.scroll_y - 2
+            panel_control.scroll_y = navheight
+            panel_control.scroll_goto_y = navheight
+            panel_control.scroll_percent = panel_control.local_percent_scrolled
+          end
+          selection.action = :up
         when :down
+          if (panel_control.offset + panel_control.panel_height) - selection.geom.stop_y < 70
+            navheight = panel_control.scroll_y + 2
+            panel_control.scroll_y = navheight
+            panel_control.scroll_goto_y = navheight
+            panel_control.scroll_percent = panel_control.local_percent_scrolled
+          end
+          selection.action = :down
         end
       end
 
@@ -498,17 +514,15 @@ module Hokusai::Blocks
       # if this is a fresh click
       # clear all selections
       if !shift && event.left.clicked
-        p ["fuckkkkk"]
         selection.clear
+        p ["start", selection.hash, @top]
         selection.geom.start(event.pos.x, event.pos.y)
         selection.geom.click_pos = [event.pos.x, event.pos.y]
       elsif event.input.keyboard.shift && event.left.down
         selection.action = :collect
         selection.geom.stop(event.pos.x, event.pos.y)
         selection.geom!
-        p ["going to geom", selection]
       elsif selection.pos?
-        p ["is geom cleared?", selection]
         # wip, this is a problem for shift click.
         # selection.geom.clear
       end
@@ -525,7 +539,6 @@ module Hokusai::Blocks
       return unless selection.geom?
       
       if event.left.up
-        p ["niling action"]
         selection.action = nil
         # by the time we switch to pos, positions should already be populated.
         selection.pos!(false)
@@ -555,6 +568,13 @@ module Hokusai::Blocks
       return if selection.cursor.nil?
 
       selection.cursor[index]
+    end
+
+    def render(canvas)
+      selection.offset_pos = 0
+      @top = canvas.y
+
+      yield canvas
     end
   end
 end

@@ -3,8 +3,13 @@ module Hokusai::Blocks
   class Text < Hokusai::Block
     template <<-EOF
     [template]
-      virtual
+      empty { 
+        @mousedown="on_mousedown"
+        @mouseup="on_mouseup"
+      }
     EOF
+
+    uses(empty: Hokusai::Blocks::Empty)
 
     computed! :content
     computed :static, default: false
@@ -34,13 +39,21 @@ module Hokusai::Blocks
       super
     end
 
+    def on_mousedown(event)
+    
+    end
+
+    def on_mouseup(event)
+      
+    end
+
     def on_resize(canvas)
       @counter = 0
       @cache = nil
       @last_content = nil
 
       if selection
-        selection.geom.cursor = nil
+        selection.cursor = nil
       end
     end
 
@@ -73,7 +86,11 @@ module Hokusai::Blocks
         cache = Hokusai::Util::WrapCache.new
         y = start_top(canvas)
 
-        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
+        off = selection&.offset_pos || 0
+        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y, off) do |string, extra|
+          if string == "\n"
+            [size, size]
+          end
           if w = user_font.measure_char(string, size)
             [w, size]
           else
@@ -93,6 +110,10 @@ module Hokusai::Blocks
           height = (stream.y - canvas.y + size).ceil
         end
 
+        if selection
+          selection.offset_pos = stream.offset_pos
+        end
+      
         node.meta.set_prop(:height, height + padding.height)
         emit("height_updated", height + padding.height)
         @last_content = content.dup
@@ -144,7 +165,7 @@ module Hokusai::Blocks
       tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top))
 
       # token selection
-      if selection
+      if selection && (node.meta.focused)
         # set up for offset tracking
         selection.offset_y = offset
         if animate_selection && selection.geom?
@@ -205,6 +226,7 @@ module Hokusai::Blocks
         @back = false
       end
 
+      # p [content[0..50], node.meta.focused]
       yield canvas
     end
   end

@@ -47,7 +47,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   provide :panel_content_height, :content_height
   provide :panel_height, :panel_height
   provide :panel_top, :panel_top
-  provide :panel, :panel
+  provide :panel_control, :panel_control
 
   attr_accessor :top, :panel_height, :scroll_y, :scroll_percent,
                 :scroll_goto_y, :clipped_offset, :clipped_content_height
@@ -64,7 +64,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     super
   end
 
-  def panel
+  def panel_control
     self
   end
   
@@ -164,7 +164,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
 
     return if clipped_content_height <= panel_height
 
-    new_scroll_y = scroll_y + (event.scroll * scroll_wheel_speed)
+    new_scroll_y = scroll_y + (event.scroll * (scroll_wheel_speed))# / scroll_control_height))
     percent = local_percent_scrolled
 
     if y = top
