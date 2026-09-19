@@ -2,7 +2,7 @@ module Hokusai
   module Util
     class PosSelection
       attr_reader :parent
-      attr_accessor :cursor_index, :state, :positions, :offset
+      attr_accessor :cursor_index, :state, :positions, :offset, :direction
 
       def initialize(parent)
         @parent = parent
@@ -10,6 +10,7 @@ module Hokusai
         @cursor_index = nil
         @state = :none
         @offset = 0
+        @direction = nil
       end
 
       def move(to, selecting, times = 1)
@@ -59,57 +60,101 @@ module Hokusai
         self.state = :frozen
       end
 
+      # Public: merges the geometry selection into the existing positions
+      #
+      # arr - the tokens that are currently selected on the screen.
+      #       Note: if the selection is out of the viewport, this will be missing tokens.
+      #
+      # Returns nothing
       def concat(arr)
         return if arr.reject(&:nil?).empty?
 
         if @positions.nil?
+          p ["wtffffff"]
           @positions = arr.first..arr.last
 
           return
         end
+        p [@positions, arr.first..arr.last, parent.geom.changed_direction?]
 
-        if parent.geom.up?
-          # was going down, now up..
-          # 
-          # a b c | d e f 
-          # d is selected when going down, but not up.
-          if parent.geom.changed_direction?
-            if arr.last > positions.first
-              range = (arr.first..arr.last)
-            else
-              range = (arr.first..positions.first)
-              self.offset -= 1
-            end
-            # p ["ooshit", arr.first..arr.last, positions]
-
-            @positions = range
-          # going up from down
-          else
-            # p ["normal", arr.first..@positions.last]
-            @positions = (arr.first..@positions.last)
+        if parent.geom.down? && parent.geom.changed_direction?
+          max = [positions.first, arr.first].max
+          if max == arr.last
+            p ["niling pos"]
+            @positions = nil
+            return
           end
+
+          p ["setting pos 1", max..arr.last]
+          @positions = max..arr.last
+          parent.geom.changed_direction = false # TEST: WIP
+        elsif parent.geom.down?
+
+          max = arr.last
+          min = positions.first#[positions.first, arr.first].min
+
+          if min == max
+            p ["niling pos"]
+
+            @positions = nil
+            return
+          end
+
+          p ["pos 2", min..max]
+          @positions = min..max
+        elsif parent.geom.up? && parent.geom.changed_direction?
+          min = [positions.first, arr.first].min
+          max = [positions.first, arr.last].max
+
+          if min == max
+            p ["niling pos"]
+
+            @positions = nil
+            return
+          end
+
+          if positions.first > arr.last
+            max -= 1
+          end
+
+          p ["pos 3", min...max]
+
+          @positions = min...max
+          parent.geom.changed_direction = false #test WIP
+        elsif parent.geom.up?
+          if arr.first == positions.last || arr.first > positions.last
+            p ["niling pos", arr.first..arr.last, positions]
+
+            @positions = nil
+            return
+          end
+
+          min = []
+
+          p ["pos 4", arr.first..positions.last]
+          @positions = arr.first...positions.last
         else
-          # was going up now down
-          # a b c | d e f
-          # c is selected when going up, but not down
-          if parent.geom.changed_direction? && !parent.pos?
-            p parent.pos?, self.offset
-            range = (positions.last)..arr.last
-            # p ["updown", range]
-            self.offset += 1
-            @positions = range
-          else
-            # p ["reg down", positions.first..arr.last]
-            @positions = (positions.first..arr.last)
-          end
+          p ["default", arr.first..arr.last]
+          @positions = arr.first..arr.last
         end
       end
 
       def selected(index)
         # p positions
         return false if positions.nil?
+
+        # if parent.geom.original_direction == :up && parent.geom.direction == :down
+        #   p ["switch up down"]
+        #   self.offset = 1
+        # elsif parent.geom.original_direction == :down && parent.geom.direction == :up
+        #   p ["downup"]
+        #   self.offset = -1
+        # else
+        #   self.offset = 0
+        # end
         
-        (positions.first..positions.last + offset).include?(index)
+        # p ["result", positions.first..positions.last +  offset]
+        (positions.first..positions.last).include?(index)
       end
 
       def clear
@@ -121,8 +166,9 @@ module Hokusai
     end
 
     class GeomSelection
-      attr_reader :parent
-      attr_accessor :start_x, :start_y, :stop_x, :stop_y, :click_pos, :modified
+      attr_reader :parent, :direction
+      attr_accessor :start_x, :start_y, :stop_x, :stop_y, :click_pos, :modified, 
+                    :changed_direction, :original_direction
       
       def initialize(parent)
         @parent = parent
@@ -132,6 +178,7 @@ module Hokusai
         @stop_y = 0.0
         @click_pos = nil
         @modified = false
+        @original_direction = nil
       end
 
       def start(x, y)
@@ -146,13 +193,15 @@ module Hokusai
       def stop(x, y)
         self.stop_x = x
         self.stop_y = y + parent.offset_y
-
         self.modified = true
+        self.original_direction ||= up? ? :up : :down
 
-        if up? && @direction == :down || down? && @direction == :up
+        if (up? && @direction == :down) || (down? && @direction == :up)
+          p ["changed irection = true", self, start_y, stop_y]
           @changed_direction = true
         else
-          @changed_direction = false
+          # p ["changed direction = false"]
+          # @changed_direction = false
         end
 
         @direction = up? ? :up : :down
@@ -283,8 +332,8 @@ module Hokusai
         state == :geom
       end
 
-      def geom!
-        pos.clear
+      def geom!(pclear = true)
+        pos.clear if pclear
 
         self.state = :geom
       end
@@ -295,6 +344,8 @@ module Hokusai
 
       def pos!(gclear = false)
         geom.clear if gclear
+        p ["changed direction = false", gclear]
+        geom.changed_direction = false
         geom.click_pos = nil
 
         self.state = :pos
@@ -309,7 +360,7 @@ module Hokusai
       end
 
       def selecting?
-        (geom?) || (pos? && pos.cursor_index)
+        (geom?) || (pos? && !pos.cursor_index.nil?)
         #(geom? && !geom.click_pos.nil?) || (pos? && pos.cursor_index)
       end
     end
@@ -393,7 +444,7 @@ module Hokusai::Blocks
       # end
   
       return unless timer.elapsed(0.2)
-      selection.action =  nav_target
+      #selection.action =  nav_target
       #   case nav_target
       #   when :left
       #     selection.action = :left
@@ -431,8 +482,8 @@ module Hokusai::Blocks
         selection.geom.stop(x, y)
       end
 
-      self.nav_target = false
-      self.page_target = false
+      self.nav_target = nil
+      self.page_target = nil
       self.shift = false unless event.shift
     end
 
@@ -447,15 +498,19 @@ module Hokusai::Blocks
       # if this is a fresh click
       # clear all selections
       if !shift && event.left.clicked
+        p ["fuckkkkk"]
         selection.clear
         selection.geom.start(event.pos.x, event.pos.y)
         selection.geom.click_pos = [event.pos.x, event.pos.y]
-      elsif shift && event.left.down
+      elsif event.input.keyboard.shift && event.left.down
         selection.action = :collect
         selection.geom.stop(event.pos.x, event.pos.y)
         selection.geom!
+        p ["going to geom", selection]
       elsif selection.pos?
-        selection.geom.clear
+        p ["is geom cleared?", selection]
+        # wip, this is a problem for shift click.
+        # selection.geom.clear
       end
     end
 
@@ -470,9 +525,10 @@ module Hokusai::Blocks
       return unless selection.geom?
       
       if event.left.up
+        p ["niling action"]
         selection.action = nil
         # by the time we switch to pos, positions should already be populated.
-        selection.pos!
+        selection.pos!(false)
         selection.pos.freeze!
       elsif event.left.down && !event.input.keyboard.shift
         selection.geom.stop(event.pos.x, event.pos.y)

@@ -235,8 +235,11 @@ module Hokusai::Util
       pcursor = nil
       position_buffer = []
       required_range = target_tokens.first.positions.first..target_tokens.last.positions.last
-            # each token should represent a wrapped line of text
+      # each token should represent a wrapped line of text
       # each token has a array of widths that repesent each char width in that line
+      if selector.action == :collect
+        p tokens.map(&:text).join("\n")
+      end
       tokens.each do |token|
         next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect || selector.action == :all
 
