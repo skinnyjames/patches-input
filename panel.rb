@@ -40,14 +40,15 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   computed :scroll_color, default: nil, convert: Hokusai::Color
   computed :scroll_page_buffer, default: 2.0, convert: proc(&:to_f)
   computed :background, default: nil, convert: Hokusai::Color
-  computed :autoclip, default: false
+  computed :autoclip, default: true
   computed :autoscroll, default: true
 
   provide :panel_offset, :offset
   provide :panel_content_height, :content_height
   provide :panel_height, :panel_height
   provide :panel_top, :panel_top
-  provide :panel, :panel
+  provide :panel_control, :panel_control
+  provide :panel_autoclip, :autoclip
 
   attr_accessor :top, :panel_height, :scroll_y, :scroll_percent,
                 :scroll_goto_y, :clipped_offset, :clipped_content_height
@@ -64,7 +65,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     super
   end
 
-  def panel
+  def panel_control
     self
   end
   
@@ -164,7 +165,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
 
     return if clipped_content_height <= panel_height
 
-    new_scroll_y = scroll_y + (event.scroll * scroll_wheel_speed)
+    new_scroll_y = scroll_y + (event.scroll * (scroll_wheel_speed))# / scroll_control_height))
     percent = local_percent_scrolled
 
     if y = top

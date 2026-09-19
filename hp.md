@@ -1,4 +1,4 @@
-# hokusai-pocket — Text Input Handling: Acceptance Criteria
+# hokusai-pocket - Text Input Handling: Acceptance Criteria
 
 ## Cursor & caret
 - [x] Cursor renders at correct pixel position for current `PieceTable` offset, accounting for word-wrap

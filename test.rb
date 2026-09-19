@@ -3,6 +3,7 @@ require_relative "./scrollbar"
 require_relative "./patches"
 require_relative "./selectable"
 require_relative "./text"
+require_relative "./selectable_text"
 require_relative "./panel"
 require_relative "./input"
 
@@ -21,22 +22,28 @@ class Test < Hokusai::Block
     padding: padding(0.0, 0.0, 0.0, 0.0);
   }
   bg {
-    background: rgb(22,22,22);
+    background: rgb(56, 50, 154);
   }
   EOF
 
   template <<-EOF
   [template]
-    hblock { ...bg }
+    vblock { background="22,22,22" }
       panel { @keypress="on_keypress" }
-        selectable
+        selectable { :vertical="true" :focus_mode="false" }
           text { ...text :content="other" @copy="handle_copy" :copy_text="copy" }
+          vblock { ...bg :height="okay_height" }
+            text { ...text @height_updated="okay" :content="content" color="222,222,222" @copy="handle_copy" :copy_text="copy" }
   EOF
 
   def on_keypress(event)
     if event.symbol == :c && (event.super || event.ctrl)
       self.copy = true
     end
+  end
+
+  def okay(height)
+    @okay_height = height
   end
 
   def handle_copy(text)
@@ -49,28 +56,23 @@ class Test < Hokusai::Block
   end
 
   def other
-    @other ||= File.read("panel.rb")
+    @other ||= begin
+      f = File.read("panel.rb")# * 40
+      f
+    end
   end
 
-  attr_accessor :copy
+  attr_accessor :copy, :okay_height
 
   def initialize(**args)
     @copy = false
+    @okay_height = 0.0
     super
   end
 
-  # register_voice :test do |voice|
-  #   voice.build_action ".*" do |builder|
-  #     builder.on_match do |str|
-  #       @file << str
-  #       Hokusai.speak(str)
-  #       "yeah buddy"
-  #     end
-  #   end
-  # end
-
   uses(
     hblock: Hokusai::Blocks::Hblock,
+    vblock: Hokusai::Blocks::Vblock,
     selectable: Hokusai::Blocks::Selectable,
     panel: Hokusai::Blocks::Panel,
     input: Hokusai::Blocks::Input,
@@ -83,6 +85,7 @@ Hokusai::Backend.run(Test) do |config|
   config.height = 500
   config.title = "input test"
   config.event_waiting = false
+  config.draw_fps = true
   # config.accessibility do |accessibility_config|
   #   accessibility_config.model_path = "assets/models/ggml-tiny.bin"
   # end

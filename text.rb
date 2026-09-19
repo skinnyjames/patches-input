@@ -6,6 +6,8 @@ module Hokusai::Blocks
       virtual
     EOF
 
+    uses(empty: Hokusai::Blocks::Empty)
+
     computed! :content
     computed :static, default: false
     computed :font, default: nil
@@ -20,6 +22,7 @@ module Hokusai::Blocks
     inject :panel_offset
     inject :panel_height
     inject :panel_top
+    inject :panel_autoclip
     inject :selection
   
     attr_accessor :counter, :copying, :last_width
@@ -37,10 +40,11 @@ module Hokusai::Blocks
     def on_resize(canvas)
       @counter = 0
       @cache = nil
+      @last_width = 0.0
       @last_content = nil
 
       if selection
-        selection.geom.cursor = nil
+        selection.cursor = nil
       end
     end
 
@@ -53,7 +57,9 @@ module Hokusai::Blocks
     end
 
     def start_top(canvas)
-      canvas.y + padding.top
+      t = canvas.y + padding.top
+      t -= offset if panel_autoclip
+      t
     end
 
     def top
@@ -67,13 +73,18 @@ module Hokusai::Blocks
     def cache(canvas)
       return @cache if counter >= 2 && (static || @last_content == content && @last_width == canvas.width)
 
-      @last_width = canvas.width
+      if @last_width != canvas.width
+        self.counter = 0
+        
+        @last_width = canvas.width
+      end
 
       @cache = begin
-        cache = Hokusai::Util::WrapCache.new
+        cache = Hokusai::Util::WrapCache.new(selection&.offset_pos || 0)
         y = start_top(canvas)
 
-        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
+        off = selection&.offset_pos || 0
+        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y, off) do |string, extra|
           if w = user_font.measure_char(string, size)
             [w, size]
           else
@@ -90,7 +101,11 @@ module Hokusai::Blocks
         if (stream.y - canvas.y).zero?
           height = size
         else
-          height = (stream.y - canvas.y + size).ceil
+          height = (stream.y - canvas.y).ceil
+        end
+
+        if selection
+          selection.offset_pos = stream.offset_pos
         end
 
         node.meta.set_prop(:height, height + padding.height)
@@ -144,7 +159,7 @@ module Hokusai::Blocks
       tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top))
 
       # token selection
-      if selection
+      if selection && (!selection.use_focus || (selection.use_focus && node.meta.focused))
         # set up for offset tracking
         selection.offset_y = offset
         if animate_selection && selection.geom?
