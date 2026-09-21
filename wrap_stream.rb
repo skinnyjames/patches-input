@@ -258,6 +258,13 @@ module Hokusai::Util
       # each token should represent a wrapped line of text
       # each token has a array of widths that repesent each char width in that line
 
+      if selector.action == :all
+        selector.pos.positions = tokens.first.positions.first..tokens.last.positions.last
+        selector.pos.cursor_index = tokens.last.positions.last
+        selector.action = nil
+        return
+      end
+
       tokens.each do |token|
         next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect || selector.action == :all
 
@@ -332,24 +339,9 @@ module Hokusai::Util
           end
 
           # if selector.action == :left && selector.selected(last_token_index + 1)
-          if selector.action == :all
-            cursor = [tx + w, ty, 0.5, token.height]
-            pcursor = token.positions[i]
-            
-            if position_buffer.nil? 
-              position_buffer = token.positions[i]..token.positions[i]
-            else
-              position_buffer = position_buffer.first..token.positions[i]
-            end
-  
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
           # if we are currently selecting by geometry, we need to populate the widths
           # cursor, and cursor_index, so that we can switch over.
-          elsif selector.geom? && selector.geom.selected(tx, ty, w, token.height)
+          if selector.geom? && selector.geom.selected(tx, ty, w, token.height)
             if (selector.geom.up?)
               cursor ||= [tx, ty, 0.5, token.height]
               pcursor ||= token.positions[i]
@@ -371,6 +363,27 @@ module Hokusai::Util
             tw += w
           # we are now selecting by position.
           elsif selector.pos? && selector.pos.selected(token.positions[i])
+            # if we are selecting up and the token is the last one, we want to start there
+            if selector.geom.resized
+              if selector.geom.direction == :up && selector.pos.positions.last == token.positions[i]
+                # p ["1 up", tx, ty, selector.offset_y]
+                selector.geom.start_x = tx + w
+                selector.geom.start_y = ty + token.height #+ selector.offset_y
+              elsif selector.geom.direction == :up && selector.pos.positions.first == token.positions[i]
+                # p ["2 up", tx, ty]
+                selector.geom.stop_x = tx
+                selector.geom.stop_y = ty
+              elsif selector.geom.direction == :down && selector.pos.positions.first == token.positions[i]
+                # p ["3 up",tx, ty]
+                selector.geom.start_x = tx
+                selector.geom.start_y = ty + token.height
+              elsif selector.geom.direction == :down && selector.pos.positions.last == token.positions[i]
+                # p ["4 up", tx, ty]
+                selector.geom.stop_x = tx + w
+                selector.geom.stop_y = ty
+              end
+            end
+
             if selector.pos.cursor_index == selector.pos.positions.first
               cursor ||= [tx, ty, 0.5, token.height]
               pcursor ||= token.positions[i]
@@ -433,7 +446,7 @@ module Hokusai::Util
 
       # we have cursors
       if pcursor
-        selector.pos.cursor_index = pcursor
+        selector.pos.cursor_index = pcursor unless selector.pos.frozen?
         selector.cursor = cursor
       end
 
@@ -441,6 +454,8 @@ module Hokusai::Util
       if !position_buffer.nil? && !selector.pos.frozen?
         selector.pos.concat position_buffer 
       end
+
+      selector.geom.resized = false
     end
 
     # Public: Gets the area coordinates for a selection

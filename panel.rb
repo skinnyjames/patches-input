@@ -125,6 +125,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   end
 
   def on_resize(canvas)
+
     # transpose scroll_y to new position
     self.scroll_goto_y = panel_height * scroll_y / canvas.height
     self.top = canvas.y

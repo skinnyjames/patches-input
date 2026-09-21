@@ -29,8 +29,8 @@ class Test < Hokusai::Block
   template <<-EOF
   [template]
     vblock { background="22,22,22" }
-      panel { @keypress="on_keypress" }
-        selectable { :vertical="true" :focus_mode="false" }
+      panel { @keypress="on_keypress" :scroll_width="50.0" }
+        selectable { :vertical="true" }
           text { ...text :content="other" @copy="handle_copy" :copy_text="copy" }
           vblock { ...bg :height="okay_height" }
             text { ...text @height_updated="okay" :content="content" color="222,222,222" @copy="handle_copy" :copy_text="copy" }

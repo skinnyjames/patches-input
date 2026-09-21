@@ -74,12 +74,12 @@ module Hokusai
 
           return
         end
-        p [@positions, arr.first..arr.last, parent.geom.changed_direction?]
+        # p [@positions, arr.first..arr.last, parent.geom.changed_direction?]
 
         if parent.geom.down? && parent.geom.changed_direction?
           max = [positions.first, arr.first].max
           if max == arr.last
-            p ["niling pos"]
+            # p ["niling pos"]
             @positions = nil
             return
           end
@@ -99,7 +99,7 @@ module Hokusai
             return
           end
 
-          p ["pos 2", min..max]
+          # p ["pos 2", min..max]
           @positions = min..max
         elsif parent.geom.up? && parent.geom.changed_direction?
           min = [positions.first, arr.first].min
@@ -116,7 +116,7 @@ module Hokusai
             max -= 1
           end
 
-          p ["pos 3", min...max]
+          # p ["pos 3", min...max]
 
           @positions = min...max
           parent.geom.changed_direction = false #test WIP
@@ -130,10 +130,10 @@ module Hokusai
 
           min = []
 
-          p ["pos 4", arr.first..positions.last]
+          # p ["pos 4", arr.first..positions.last]
           @positions = arr.first...positions.last
         else
-          p ["default", arr.first..arr.last]
+          # p ["default", arr.first..arr.last]
           @positions = arr.first..arr.last
         end
       end
@@ -167,7 +167,7 @@ module Hokusai
     class GeomSelection
       attr_reader :parent, :direction
       attr_accessor :start_x, :start_y, :stop_x, :stop_y, :click_pos, :modified, 
-                    :changed_direction, :original_direction
+                    :changed_direction, :original_direction, :resized
       
       def initialize(parent)
         @parent = parent
@@ -178,6 +178,7 @@ module Hokusai
         @click_pos = nil
         @modified = false
         @original_direction = nil
+        @resized = false
       end
 
       def start(x, y)
@@ -295,7 +296,8 @@ module Hokusai
 
     class Selection
       attr_reader :pos, :geom
-      attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, :action, :state, :use_focus, :top
+      attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, 
+                    :action, :state, :use_focus, :focus_id, :top
 
       def initialize
         @pos = PosSelection.new(self)
@@ -307,6 +309,7 @@ module Hokusai
         @action = nil
         @state = :geom
         @use_focus = false
+        @focus_id = nil
         @top = 0.0
       end
 
@@ -344,7 +347,7 @@ module Hokusai
 
       def pos!(gclear = false)
         geom.clear if gclear
-        p ["changed direction = false", gclear]
+        # p ["changed direction = false", gclear]
         geom.changed_direction = false
         geom.click_pos = nil
 
@@ -478,7 +481,7 @@ module Hokusai::Blocks
         when :right
           selection.pos.move(:right, true)
         when :up
-          p [panel_control.offset, selection.geom.stop_y]
+          # p [panel_control.offset, selection.geom.stop_y]
           if selection.geom.stop_y - panel_control.offset < 70
             navheight = panel_control.scroll_y - 2
             panel_control.scroll_y = navheight
@@ -508,6 +511,16 @@ module Hokusai::Blocks
       self.shift = false unless event.shift
     end
 
+    def on_resize(canvas)
+      # resizing triggers a click event. >:(
+      @resizing = true
+      selection.geom.clear
+      selection.geom.resized = true
+      selection.action = :collect
+
+      # selection.pos.cursor_index = nil
+    end
+
     def on_click(event)
       if event.right.clicked
         p selection.inspect
@@ -518,19 +531,19 @@ module Hokusai::Blocks
 
       # if this is a fresh click
       # clear all selections
-      if !shift && event.left.clicked
+      if !event.input.keyboard.shift && event.left.clicked && !@resizing
         selection.clear
-        p ["start", selection.hash, @top]
         selection.geom.start(event.pos.x, event.pos.y)
         selection.geom.click_pos = [event.pos.x, event.pos.y]
-      elsif event.input.keyboard.shift && event.left.down
+      elsif event.input.keyboard.shift && event.left.down && !@resizing
+        # Bug: when shift click after a resize, the geometry is messed up from the resize, and this will not work.
+        # We would absolutely need to get the geometry from the pos selection.
         selection.action = :collect
         selection.geom.stop(event.pos.x, event.pos.y)
         selection.geom!
-      elsif selection.pos?
-        # wip, this is a problem for shift click.
-        # selection.geom.clear
       end
+
+      @resize = false
     end
 
     def on_mouseup(event)
@@ -542,7 +555,7 @@ module Hokusai::Blocks
 
     def on_hover(event)
       return unless selection.geom?
-      
+
       if event.left.up
         selection.action = nil
         # by the time we switch to pos, positions should already be populated.
@@ -579,6 +592,7 @@ module Hokusai::Blocks
       selection.use_focus = focus_mode
       selection.offset_pos = 0
       @top = canvas.y
+      @resizing = false
 
       yield canvas
     end

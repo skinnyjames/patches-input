@@ -40,8 +40,8 @@ module Hokusai::Blocks
     def on_resize(canvas)
       @counter = 0
       @cache = nil
-      @last_width = 0.0
       @last_content = nil
+      @last_width = 0.0
 
       if selection
         selection.cursor = nil
@@ -58,7 +58,7 @@ module Hokusai::Blocks
 
     def start_top(canvas)
       t = canvas.y + padding.top
-      t -= offset if panel_autoclip
+      t += offset if panel_autoclip
       t
     end
 
@@ -98,10 +98,10 @@ module Hokusai::Blocks
         stream.wrap(content, nil)
         stream.flush
 
-        if (stream.y - canvas.y).zero?
+        if (stream.y - y - padding.top).zero?
           height = size
         else
-          height = (stream.y - canvas.y).ceil
+          height = (stream.y - y - padding.top).ceil
         end
 
         if selection
@@ -159,8 +159,9 @@ module Hokusai::Blocks
       tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top))
 
       # token selection
-      if selection && (!selection.use_focus || (selection.use_focus && node.meta.focused))
+      if selection && (!selection.use_focus) || (selection.use_focus && (node.meta.focused || node.uuid == selection.focus_id))
         # set up for offset tracking
+        selection.focus_id = node.uuid
         selection.offset_y = offset
         if animate_selection && selection.geom?
           shader_begin do |command|
@@ -174,7 +175,6 @@ module Hokusai::Blocks
         end
 
         token_cache.selected_area_for_tokens(tokens, selection, padding: padding) do |rect|
-          # y = rect.y + selection.diff
           rect(rect.x, rect.y, rect.width, rect.height) do |command|
             command.color = selection_color
           end
@@ -220,6 +220,7 @@ module Hokusai::Blocks
         @back = false
       end
 
+      node.meta.blur
       yield canvas
     end
   end
