@@ -146,12 +146,11 @@ module Hokusai::Blocks
 
     def render(canvas)
       if content.nil? || content.empty?
-        if selection && selection.selecting?
-          selection.pos.cursor_index = -1
-          selection.pos.positions = []
-          selection.geom.cursor = [canvas.x + padding.left, top + padding.top, 0.5, size]
+        if selection && selection.selecting? && node.meta.focused && selection.use_focus
+          selection.pos.cursor_index = 0
+          selection.pos.positions = nil
+          selection.cursor = [canvas.x + padding.left, top + padding.top, 0.5, size]
         end
-
         return yield canvas
       end
 

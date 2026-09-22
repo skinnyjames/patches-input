@@ -21,6 +21,11 @@ class Test < Hokusai::Block
     size: 24;
     padding: padding(0.0, 0.0, 0.0, 0.0);
   }
+  input {
+    size: 52;
+    text_selection_color: rgb(199, 131, 187);
+    text_selection_color_to: rgb(119, 141, 203);
+  }
   bg {
     background: rgb(56, 50, 154);
   }
@@ -28,7 +33,7 @@ class Test < Hokusai::Block
 
   template <<-EOF
   [template]
-    vblock { background="22,22,22" }
+    vblock { background="22,22,22"}
       panel { @keypress="on_keypress" }
         selectable { :vertical="true" }
           text { ...text :content="other" @copy="handle_copy" :copy_text="copy" }
@@ -41,6 +46,10 @@ class Test < Hokusai::Block
     if event.symbol == :c && (event.super || event.ctrl)
       self.copy = true
     end
+  end
+  
+  def foo
+    @foo ||= ""
   end
 
   def okay(height)
@@ -92,7 +101,7 @@ Hokusai::Backend.run(Test) do |config|
   # end
 
   config.after_load do
-    Hokusai.fonts.register "default", Hokusai::Backend::Font.from_ext("assets/OpenSans.ttf", 24)
+    Hokusai.fonts.register "default", Hokusai::Backend::Font.from_ext("assets/OpenSans.ttf", 52)
     Hokusai.fonts.activate "default"
   end
 end

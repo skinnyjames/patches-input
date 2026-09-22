@@ -14,13 +14,13 @@ module Hokusai
       end
 
       def move(to, selecting, times = 1)
-        return if cursor_index.nil? || positions.nil?
+        return if cursor_index.nil? || (selecting && positions.nil?)
 
         case to
         when :right
           self.cursor_index += times
 
-          if cursor_index == positions.last
+          if positions && cursor_index == positions.last
             self.positions = cursor_index..cursor_index
           elsif selecting && !positions.nil? && cursor_index <= positions.last
             self.positions = (positions.first + 1)...positions.last
@@ -317,7 +317,8 @@ module Hokusai
     class Selection
       attr_reader :pos, :geom
       attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, 
-                    :action, :state, :use_focus, :focus_id, :top, :column
+                    :action, :state, :use_focus, :focus_id, :top, :column,
+                    :insert
 
       def initialize
         @pos = PosSelection.new(self)
@@ -332,7 +333,21 @@ module Hokusai
         @focus_id = nil
         @top = 0.0
         @column = nil
+        @insert = false
       end
+      
+      # def cursor_index
+      #   return pos.cursor_index unless insert
+    
+      #   case pos.cursor_index
+      #   when nil
+      #     0
+      #   when 0
+      #     0
+      #   else
+
+      #   end
+      # end
 
       def cursor=(arr)
         return if (geom? && !geom.modified)

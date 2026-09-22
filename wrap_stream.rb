@@ -414,6 +414,7 @@ module Hokusai::Util
             elsif selector.pos.cursor_index == selector.pos.positions.last
               cursor = [tx + w, ty, 0.5, token.height]
               pcursor = token.positions[i]
+
             elsif selector.pos.cursor_index + 1 == token.positions[i]
               cursor = [tx, ty, 0.5, token.height]
               pcursor = token.positions[i] - 1
@@ -433,11 +434,16 @@ module Hokusai::Util
 
           # cursor handling when there is no selection
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
-            # p ["set cursor"]
             cursor = [tx, ty, 0.5, token.height]
             pcursor = selector.pos.cursor_index
+            # p ["wierd"]
+          # elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index - 1 == token.positions[i]
+          #   p ["set weird 2"]
+          #   cursor = [tx + w, ty, 0.5, token.height]
+          #   pcursor = selector.pos.cursor_index
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
             # p ["set cursor", selector.pos.cursor_index]
+            
             cursor = [tx + w, ty, 0.5, token.height]
             pcursor = selector.pos.cursor_index
             #selector.pos.offset += 1
@@ -452,7 +458,9 @@ module Hokusai::Util
               pcursor ||= token.positions[i]
             end
           elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(tx, ty, token.width, token.height)
-            pcursor = token.positions[i] - 1
+            pcursor = token.positions[i].zero? ? 0 : token.positions[i]
+            cursor = [tx, ty + w, 0.5, token.height]
+            # p ["pcursor", pcursor, cursor]
           end
 
           # move the current x forward
