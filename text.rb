@@ -77,14 +77,38 @@ module Hokusai::Blocks
         self.counter = 0
         
         @last_width = canvas.width
-      end
-
-      @cache = begin
-        cache = Hokusai::Util::WrapCache.new(selection&.offset_pos || 0)
+      elsif @last_content != content && @cache
+        # splicing in content
         y = start_top(canvas)
 
-        off = selection&.offset_pos || 0
-        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y, off) do |string, extra|
+        # off = selection&.offset_pos || 0
+        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, 0.0) do |string, extra|
+          if w = user_font.measure_char(string, size)
+            [w, size]
+          else
+            [user_font.measure(string, size).first, size]
+          end
+        end
+
+        new_y = @cache.splice(stream, content, selection: selection)
+        if (new_y - y - padding.top).zero?
+          height = size
+        else
+          height = (new_y - y - padding.top + size).ceil
+        end
+
+        node.meta.set_prop(:height, height + padding.height)
+        emit("height_updated", height + padding.height)
+        @last_content = content.dup
+
+        return @cache
+      end
+      
+      @cache = begin
+        cache = Hokusai::Util::WrapCache.new(0)#selection&.offset_pos || 0)
+        y = start_top(canvas)
+        # off = selection&.offset_pos || 0
+        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
           if w = user_font.measure_char(string, size)
             [w, size]
           else
@@ -101,11 +125,7 @@ module Hokusai::Blocks
         if (stream.y - y - padding.top).zero?
           height = size
         else
-          height = (stream.y - y - padding.top).ceil
-        end
-
-        if selection
-          selection.offset_pos = stream.offset_pos
+          height = (stream.y - y - padding.top + size).ceil
         end
 
         node.meta.set_prop(:height, height + padding.height)
@@ -145,21 +165,28 @@ module Hokusai::Blocks
     end
 
     def render(canvas)
-      if content.nil? || content.empty?
-        if selection && selection.selecting? && node.meta.focused && selection.use_focus
+      if content.nil? || content.size.zero?
+        if selection && node.meta.focused #|| (selection.use_focus && (node.meta.focused || node.uuid == selection.focus_id))
           selection.pos.cursor_index = 0
           selection.pos.positions = nil
-          selection.cursor = [canvas.x + padding.left, top + padding.top, 0.5, size]
+          selection.cursor = [canvas.x + padding.left, top + padding.top, 3.5, size]
         end
-        return yield canvas
+
+        yield canvas
+        return
       end
 
       token_cache = cache(canvas)
+      # if content is removed or added from a previous sibling text node, the y offset of this node will change.
+      # we need to calculate and persist the diff.
+      diff = canvas.y.round(2) + offset.round(2) - token_cache.tokens.first.y.round(2)
+      token_cache.diff_y = diff
       tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top))
 
       # token selection
-      if selection && (!selection.use_focus) || (selection.use_focus && (node.meta.focused || node.uuid == selection.focus_id))
+      if selection && (!selection.use_focus) || selection && (selection.use_focus && (node.meta.focused || node.uuid == selection.focus_id))
         # set up for offset tracking
+        selection.clear if selection.focus_id != node.uuid
         selection.focus_id = node.uuid
         selection.offset_y = offset
         if animate_selection && selection.geom?
@@ -179,8 +206,6 @@ module Hokusai::Blocks
           end
         end
 
-        # emit("selected", copied) unless copied.nil?
-
         if copy_text
           copystuff = token_cache.selected_text(content, selection)
 
@@ -195,7 +220,7 @@ module Hokusai::Blocks
 
       tokens.each do |wrapped|
         # draw text
-        text(wrapped.text, wrapped.x + padding.left, wrapped.y + padding.top - offset || 0.0) do |command|
+        text(wrapped.text, wrapped.x + padding.left, wrapped.y + diff + padding.top - offset || 0.0) do |command|
           command.color = color
           command.size = size
           if font
@@ -219,7 +244,6 @@ module Hokusai::Blocks
         @back = false
       end
 
-      node.meta.blur
       yield canvas
     end
   end

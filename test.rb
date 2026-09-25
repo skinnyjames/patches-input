@@ -18,27 +18,31 @@ class Test < Hokusai::Block
     text_color: rgb(222,222,222);
     text_selection_color: rgb(79, 9, 66);
     text_selection_color_to: rgb(29,35,52);
-    size: 24;
+    size: 18;
     padding: padding(0.0, 0.0, 0.0, 0.0);
   }
   input {
-    size: 52;
+    size: 18;
     text_selection_color: rgb(199, 131, 187);
     text_selection_color_to: rgb(119, 141, 203);
   }
   bg {
     background: rgb(56, 50, 154);
   }
+  cursor {
+    cursor_color: rgb(222,222,222);
+  }
   EOF
 
   template <<-EOF
   [template]
     vblock { background="22,22,22"}
+      vblock { :height="50.0" ...bg }
+        empty
       panel { @keypress="on_keypress" }
-        selectable { :vertical="true" }
-          text { ...text :content="other" @copy="handle_copy" :copy_text="copy" }
-          vblock { ...bg :height="okay_height" }
-            text { ...text :content="content" @height_updated="okay" }
+        selectable { :vertical="true" ...cursor }
+          input { ...text :model="other" }
+          input { ...text ...bg @height_updated="okay" :model="content" }
 
   EOF
 
@@ -77,6 +81,7 @@ class Test < Hokusai::Block
   def initialize(**args)
     @copy = false
     @okay_height = 0.0
+    @toggle = false
     super
   end
 
@@ -87,6 +92,7 @@ class Test < Hokusai::Block
     panel: Hokusai::Blocks::Panel,
     input: Hokusai::Blocks::Input,
     text: Hokusai::Blocks::Text,
+    empty: Hokusai::Blocks::Empty,
   )
 end
 
@@ -101,7 +107,7 @@ Hokusai::Backend.run(Test) do |config|
   # end
 
   config.after_load do
-    Hokusai.fonts.register "default", Hokusai::Backend::Font.from_ext("assets/OpenSans.ttf", 52)
+    Hokusai.fonts.register "default", Hokusai::Backend::Font.from_ext("assets/NotoSans.ttf", 36)
     Hokusai.fonts.activate "default"
   end
 end

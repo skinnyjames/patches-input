@@ -88,16 +88,16 @@ module Hokusai
     # Public: Is the pressed key printable?
     # 
     # Returns boolean
-    def printable?
+    def printable?(type = :pressed)
       [
-        :space, :tab, :apostrophe, :comma, :minus, :period,
-        :slash, :right_bracket, :left_bracket, :grave,
+        :space, :apostrophe, :comma, :minus, :period,
+        :slash, :right_bracket, :left_bracket, :grave, :equal,
         :zero, :one, :two, :three, :four, :five, :six, 
         :seven, :eight, :nine, :semicolon, 
         :a, :b, :c, :d, :e, :f, :g, :h,
         :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, 
         :s, :t, :u, :v, :w, :x, :y, :z,
-      ].include?(symbol)
+      ].include?(symbol(type))
     end
   end
 end
@@ -189,6 +189,7 @@ class Hokusai::Blocks::ScissorBegin < Hokusai::Block
     slot
   EOF
 
+  inject :panel_top
   inject :panel_offset
   computed :offset, default: 0.0, convert: proc(&:to_f)
   computed :auto, default: true
@@ -202,7 +203,7 @@ class Hokusai::Blocks::ScissorBegin < Hokusai::Block
       scissor_begin(canvas.x, canvas.y, canvas.width, canvas.height)
     end
 
-    canvas.y -= off if auto
+    canvas.y -= off.dup if auto
     canvas.offset_y = off
 
     yield canvas

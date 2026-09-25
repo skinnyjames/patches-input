@@ -58,7 +58,7 @@ module Hokusai
 
       def freeze!
         self.state = :frozen
-      end
+      end  
 
       # Public: merges the geometry selection into the existing positions
       #
@@ -383,7 +383,6 @@ module Hokusai
 
       def pos!(gclear = false)
         geom.clear if gclear
-        # p ["changed direction = false", gclear]
         geom.changed_direction = false
         geom.click_pos = nil
 
@@ -391,7 +390,7 @@ module Hokusai
       end
 
       def clear
-        geom.clear
+        # geom.clear
         pos.clear
         self.cursor = nil
 

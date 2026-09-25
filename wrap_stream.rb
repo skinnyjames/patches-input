@@ -35,52 +35,93 @@ module Hokusai::Util
   #         Utiltiy methods are provided to quickly fetch a subset of tokens
   #         Based on a given window's coordinates (canvas)
   class WrapCache
-    attr_accessor :tokens
+    attr_accessor :tokens, :diff_y
 
-    # Public: returns range denoting the index of the changed lines
-    #         from 2 different strings.
-    #         NOTE: the change must be consecutive
-    def self.diff(first, second)
-      arr = (0..first.length).to_a
+    def diff(new_content)
+      return nil if tokens.empty? 
+      old_len = tokens.last.positions.last + 1
+      delta = new_content.length - old_len
 
-      v = arr.bsearch do |i|
-        first.rindex(second[0..i]) != 0
+      sidx = 0
+      while sidx < tokens.size
+        t = tokens[sidx]
+        start = t.positions.first
+        break unless new_content[start, t.text.length] == t.text
+        sidx += 1
       end
+      
+      return nil if sidx == tokens.size && delta.zero? # truly identical
 
-      # bounds checks
-      v = first.size if v.nil?
-      v -= 1 if first[v] == "\n"
-
-      a = 0
-      while true
-        if first[v] == "\n"
-          a = v + 1
-          break
-        elsif v.zero?
-          a = v
+      eidx = tokens.size - 1
+      while eidx > sidx
+        t = tokens[eidx]
+        new_start = t.positions.first + delta
+        unless new_start >= 0 && new_content[new_start, t.text.length] == t.text
           break
         end
-        v -= 1
+
+        eidx -= 1
       end
 
-      b = a
-      while true
-        if first[b].nil?
-          b = first.size - 1
-          break
-        elsif first[b] == "\n"
-          break
+      eidx += 1 if delta.negative?
+      eidx = tokens.size - 1 if eidx >= tokens.size
+      sidx = eidx if sidx >= eidx
+
+      old_first = tokens[sidx].positions.first
+      old_last  = tokens[eidx].positions.last + 1
+      new_first = old_first
+      new_last  = old_last + delta
+
+      [sidx, eidx, (old_first...old_last), (new_first...new_last)]
+    end
+
+    def splice(stream, new_content, selection: nil)
+      sidx, eidx, oldrange, newrange = diff(new_content)
+      return if sidx.nil? # no change
+
+      new_data = new_content[newrange]
+      old_text_callback = stream.on_text_cb
+      newtokens = []
+      newheight = 0.0
+      diff = newrange.size - oldrange.size
+
+      yold = tokens[sidx].y
+      stream.on_text do |wrapped|
+        unless wrapped.positions.empty?
+          newheight += wrapped.height
+          wrapped.y += yold
+          wrapped.positions.map! { |pos| pos + oldrange.first }
+          newtokens << wrapped
         end
-        b += 1
       end
 
-      a..b
+      stream.wrap(new_data, nil)
+      stream.flush
+
+      oldheight = tokens[sidx..eidx].reduce(0.0) { |memo, token| memo + token.height }
+      heightdiff = newheight - oldheight
+
+      tokens[eidx + 1..].each do |token|
+        token.y += heightdiff
+        token.positions.map! { |pos| pos + diff }
+      end
+
+      if newtokens.empty?
+        tokens[sidx..eidx] = nil
+        tokens.reject!(&:nil?)
+      else
+        tokens[sidx..eidx] = newtokens
+      end
+
+      stream.on_text(&old_text_callback)
+      tokens.last.y
     end
 
     attr_accessor :offset_pos
 
     def initialize(offset_pos = 0)
       @offset_pos = offset_pos
+      @diff_y = 0.0
       @tokens = []
     end
 
@@ -119,106 +160,11 @@ module Hokusai::Util
       @tokens << element unless element.positions.empty?
     end
 
-    def splice(stream, last_content, new_content, selection: nil)
-      change_line_indicies = WrapCache.diff(last_content, new_content)
-      new_changed_line_indicies = WrapCache.diff(new_content, last_content)
-
-      new_data = new_content[new_changed_line_indicies]
-      old_text_callback = stream.on_text_cb
-      records = []
-      # the height of the new records
-      records_height = 0.0
-
-      stream.on_text do |wrapped|
-        unless wrapped.positions.empty?
-          records_height += wrapped.height
-          wrapped.positions.map! do |pos|
-            pos + change_line_indicies.begin
-          end
-          records << wrapped
-        end
-      end
-
-      stream.wrap(new_data, nil)
-      stream.flush
-
-      # puts ["original.tokens.last.y", tokens.last.y].inspect
-
-      # splice in new tokens
-      #
-      # update the new positions
-      # NOTE: still need to udpate the y positions with the 
-      # records.each do |record|
-      #   records_height += record.height
-      #   record.positions.map! do |pos|
-      #     pos + change_line_indicies.begin
-      #   end
-      # end
-
-      diff_pos = (new_changed_line_indicies.end - change_line_indicies.end)
-      new_tokens = []
-      found = false
-      last_token = nil
-      new_last_tokens_height = 0.0
-      last_tokens_height = 0.0
-      insert_index = 0
-
-      while token = tokens.shift
-        next if token.positions.empty?
-        if token.range.begin >= change_line_indicies.begin && token.range.end <= change_line_indicies.end
-          # this is a match
-          # we want to remove these tokens from the list...and then sub in our new tokens.
-          last_token = token
-          last_tokens_height += token.height
-          found = true
-          next
-        end
-
-        if found
-          token.y += (records_height - last_tokens_height)
-
-          token.positions.map! do |pos|
-            pos + diff_pos
-          end
-        else
-          insert_index += 1
-          new_last_tokens_height += token.height
-        end
-
-        new_tokens << token
-      end
-
-      records.each do |record|
-        record.y += new_last_tokens_height
-      end
-
-      # puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
-
-      new_tokens.insert(insert_index, *records)
-      self.tokens = new_tokens
-      
-
-      # i = 0
-      # tokens.each do |token|
-      #   # puts ["token", token].inspect
-      #   token.positions.each do |n|
-      #     if n != i
-      #       puts ["Mismatch token", token, i, n].inspect
-      #     end
-
-      #     i += 1
-      #   end
-      # end
-
-      # restore callback
-      stream.on_text(&old_text_callback)
-      # return y
-      tokens.last.y + tokens.last.height
-    end
-
     def bsearch(canvas)
       low = 0
       high = tokens.size - 1
+
+      return 0 if high.zero?
 
       while low <= high
         mid = low + (high - low) / 2
@@ -227,11 +173,11 @@ module Hokusai::Util
           return mid
         end
 
-        if tokens[mid].y > canvas.y
+        if tokens[mid].y + diff_y > canvas.y
           high = mid - 1
         end
 
-        if tokens[mid].y < canvas.y
+        if tokens[mid].y + diff_y < canvas.y
           low = mid + 1
         end
       end
@@ -240,7 +186,7 @@ module Hokusai::Util
     end
 
     def matches(wrapped, canvas)
-      wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
+      wrapped.y + diff_y >= canvas.y && wrapped.y + diff_y <= canvas.y + canvas.height
     end
 
     # Populate the selection positions from geometry
@@ -292,7 +238,7 @@ module Hokusai::Util
         end
 
         tx = token.x + padding.left
-        ty = token.y + padding.top
+        ty = token.y + padding.top + diff_y
 
         if token.y != cy
           x = nil
@@ -457,9 +403,9 @@ module Hokusai::Util
             else
               pcursor ||= token.positions[i]
             end
-          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(tx, ty, token.width, token.height)
-            pcursor = token.positions[i].zero? ? 0 : token.positions[i]
-            cursor = [tx, ty + w, 0.5, token.height]
+          # elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(tx, ty, token.width, token.height)
+          #   pcursor = token.positions[i].zero? ? 0 : token.positions[i]
+          #   cursor = [tx, ty + w, 0.5, token.height]
             # p ["pcursor", pcursor, cursor]
           end
 
@@ -469,7 +415,7 @@ module Hokusai::Util
         
         if !x.nil?
           # if we have a selection, yield it.
-          ay = cy + padding.top - selector.offset_y
+          ay = cy + padding.top - selector.offset_y + diff_y
           yield Hokusai::Rect.new(x, ay, tw, token.height)
 
           tw = 0.0
@@ -478,6 +424,7 @@ module Hokusai::Util
 
       # we have cursors
       if pcursor
+        # p ["setting pcursor", pcursor, selector.pos.frozen?, selector.pos.cursor_index]
         selector.pos.cursor_index = pcursor unless selector.pos.frozen?
         selector.cursor = cursor
       end
@@ -494,13 +441,10 @@ module Hokusai::Util
     # 
     # Return Array(Hokusai::Util::Wrapped)
     def tokens_for(canvas)
-      unless @foo
-        # p tokens
-        @foo = true
-      end
-
       index = bsearch(canvas)
+
       return [] if index.nil?
+  
       lindex = index.zero? ? index : index - 1
       rindex = index + 1
 
@@ -713,7 +657,6 @@ module Hokusai::Util
         content = buffer[range]
         size = content.size
         content_width, content_height = measure(content, extra)
-        # p ["flushing",content, y]
 
         wrap_and_call(content, content_width, content_height, extra)
         self.x += content_width

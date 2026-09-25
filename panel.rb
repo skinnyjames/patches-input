@@ -246,7 +246,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   end
 
   def render(canvas)
-    self.top = canvas.y
+    self.top ||= canvas.y
     self.panel_height = canvas.height
 
     yield canvas
