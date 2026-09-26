@@ -39,10 +39,9 @@ class Test < Hokusai::Block
     vblock { background="22,22,22"}
       panel { @keypress="on_keypress" }
         selectable { :vertical="true" ...cursor }
-          input { ...text :model="other" }
-      panel { ...bg }
-        selectable
-          input {:model="foo" cursor="pointer" ...text }
+          text { ...text :content="other" }
+          input { ...text ...bg :model="foo" }
+      
   EOF
 
   def on_keypress(event)

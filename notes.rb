@@ -24,6 +24,7 @@ class TodoItem < Hokusai::Block
         color="222,222,222"
         :content="content"
         :size="size"
+        :min_height="100.0"
         @height_updated="update_height"
       }
   EOF

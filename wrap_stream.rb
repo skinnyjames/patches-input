@@ -99,7 +99,7 @@ module Hokusai::Util
       stream.flush
 
       oldheight = tokens[sidx..eidx].reduce(0.0) { |memo, token| memo + token.height }
-      heightdiff = newheight - oldheight
+      heightdiff = newheight - oldheight #+ tokens.last.height
 
       tokens[eidx + 1..].each do |token|
         token.y += heightdiff
@@ -197,6 +197,8 @@ module Hokusai::Util
       cy = nil
       cursor = nil
       pcursor = nil
+      lcursor = nil
+      lpcursor = nil
       position_buffer = nil
       required_range = target_tokens.first.positions.first..target_tokens.last.positions.last
 
@@ -205,7 +207,7 @@ module Hokusai::Util
       if selector.action == :all
         selector.pos.positions = tokens.first.positions.first..tokens.last.positions.last
         selector.pos.cursor_index = tokens.last.positions.last
-        selector.action = nil
+        selector.action = :collect
         return
       end
 
@@ -361,8 +363,12 @@ module Hokusai::Util
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index - 1 == token.positions[i]
             cursor = [tx + w, ty, 0.5, token.height]
             pcursor = selector.pos.cursor_index
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]            
-            cursor = [tx + w, ty, 0.5, token.height]
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
+            if token.text[i] == "\n"
+              cursor = [token.x + padding.left, ty + token.height, 0.5, token.height]
+            else
+              cursor = [tx + w, ty, 0.5, token.height]
+            end
             pcursor = selector.pos.cursor_index
             #selector.pos.offset += 1
           elsif selector.geom? && selector.pos.cursor_index.nil? && selector.geom.clicked(tx + (w/2.0), ty, (w/2.0), token.height)
@@ -378,6 +384,9 @@ module Hokusai::Util
           elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(token.x, ty, token.width, token.height)
             pcursor = token.positions[i].zero? ? 0 : token.positions[i]
             cursor = [tx, ty + w, 0.5, token.height]
+          else
+            lpcursor = token.positions[i]
+            lcursor = [tx, ty + w, 0.5, token.height]
           end
 
           # move the current x forward

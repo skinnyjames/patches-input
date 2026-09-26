@@ -11,7 +11,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
   computed :y, default: 0.0
   computed :show, default: false
   computed :speed, default: 0.5
-  computed :cursor_width, default: 2.0
+  computed :cursor_width, default: 5.0
   computed :cursor_height, default: 0.0
   computed :color, default: DEFAULT_COLOR, convert: Hokusai::Color
 
@@ -34,7 +34,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     end
   end
 
-  def render(canvas)    
+  def render(canvas)  
     if show
       draw do
         if @active
@@ -157,6 +157,10 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
       h = children.map {|block| block.node.meta.get_prop?(:height)&.to_f || 0.0 }.max
     end
 
+    if @last && h < @last.height
+      h = @last.height
+    end
+
     node.meta.set_prop(:height, h)
 
     [w, h]
@@ -165,6 +169,7 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
   def render(canvas)
     canvas.vertical = vertical
     canvas.reverse = (reverse == true || reverse == "true")
+    @last = canvas
 
     yield canvas
   end

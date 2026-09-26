@@ -166,8 +166,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
 
     return if clipped_content_height <= panel_height
 
-    new_scroll_y = scroll_y + (event.scroll * (scroll_wheel_speed))# / scroll_control_height))
-    percent = local_percent_scrolled
+    new_scroll_y = scroll_y + (event.scroll * (scroll_wheel_speed))
 
     if y = top
       # percent is 0.0
@@ -201,9 +200,11 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   end
 
   def set_size(_, height)
-    if panel_height != clipped_content_height || clipped_content_height.zero?
+    if height < panel_height
+      self.clipped_content_height = panel_height
+    else
+    # if panel_height != clipped_content_height || clipped_content_height.zero? || (height > clipped_content_height || height > 0)
       self.clipped_content_height = height
-      # self.scroll_goto_y = self.scroll_y unless scroll_y == top
     end
   end
 

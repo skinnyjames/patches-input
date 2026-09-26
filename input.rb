@@ -15,6 +15,8 @@ class Hokusai::Blocks::Input < Hokusai::Block
         :selection_color_to="selection_color_to"
         :animate_selection="animate_selection"
         :copy_text="copy"
+        :min_height="min_height"
+        :max_height="max_height"
         @copy="on_copy"
         @selected="handle_selection"
         @keypress="handle_keypress"
@@ -45,20 +47,24 @@ class Hokusai::Blocks::Input < Hokusai::Block
   computed :size, default: 34, convert: proc(&:to_i)
   computed :tabsize, default: 2, convert: proc(&:to_i)
   computed :padding, default: Hokusai::Padding.new(0.0, 0.0, 0.0, 0.0), convert: Hokusai::Padding
+  computed :min_height, default: nil
+  computed :max_height, default: nil
 
   inject :selection
   
   attr_reader :timer
   attr_accessor :content, :buffer, :positions, :content_height, :shift, :copy
+  
+  def before_updated
+    # if model == "" && node.meta.focused
+    #   selection.clear
+    #   selection.pos.cursor_index = 0
+    #   # selection.pos.cursor_index = nil
+    # end
+  end
 
   def focus(event)
-   node.meta.focus
-  end
-  
-  def after_updated
-    if model == ""
-      selection.pos.cursor_index = nil
-    end
+    # node.meta.focus
   end
 
   def initialize(**args)
@@ -69,10 +75,6 @@ class Hokusai::Blocks::Input < Hokusai::Block
     @content_height = 0.0
     @buffer = ""
     @timer = Hokusai::Timer.new
-  end
-
-  def whatever(event)
-    node.meta.focus
   end
 
   def on_copy(text)
@@ -192,7 +194,6 @@ class Hokusai::Blocks::Input < Hokusai::Block
       end
     elsif event.symbol == :backspace
       if range
-
         model[range] = ""
         selection.pos.positions = nil
         selection.geom.clear

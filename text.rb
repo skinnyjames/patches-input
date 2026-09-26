@@ -18,7 +18,9 @@ module Hokusai::Blocks
     computed :selection_color_to, default: [183, 225, 229], convert: Hokusai::Color
     computed :animate_selection, default: true
     computed :copy_text, default: false
-    
+    computed :min_height, default: nil
+    computed :max_height, default: nil
+
     inject :panel_offset
     inject :panel_height
     inject :panel_top
@@ -44,6 +46,7 @@ module Hokusai::Blocks
       @last_width = 0.0
 
       if selection
+        p ["resize"]
         selection.cursor = nil
       end
     end
@@ -59,11 +62,12 @@ module Hokusai::Blocks
     def start_top(canvas)
       t = canvas.y + padding.top
       t += offset if panel_autoclip
+      t += panel_top || 0.0
       t
     end
 
     def top
-      offset + padding.top
+      offset + padding.top + (panel_top || 0.0)
     end
 
     def panel_height_or_canvas_height(canvas)
@@ -96,6 +100,16 @@ module Hokusai::Blocks
           height = (new_y - y - padding.top + size).ceil
         end
 
+        if content.end_with?("\n")
+          height += self.size
+        end
+        
+        if min_height && height < min_height
+          height = min_height
+        elsif max_height && height > max_height
+          height = max_height
+        end
+        
         node.meta.set_prop(:height, height + padding.height)
         emit("height_updated", height + padding.height)
         @last_content = content.dup
@@ -124,6 +138,16 @@ module Hokusai::Blocks
           height = size
         else
           height = (stream.y - y - padding.top + size).ceil
+        end
+
+        if content.end_with?("\n")
+          height += self.size
+        end
+        
+        if min_height && height < min_height
+          height = min_height
+        elsif max_height && height > max_height
+          height = max_height
         end
 
         node.meta.set_prop(:height, height + padding.height)
@@ -163,11 +187,27 @@ module Hokusai::Blocks
     end
 
     def render(canvas)
+      # @min_height = canvas.height
       if content.nil? || content.size.zero?
-        if selection && node.meta.focused #|| (selection.use_focus && (node.meta.focused || node.uuid == selection.focus_id))
+
+        height = min_height || size
+        node.meta.set_prop(:height, height)
+        emit("height_updated", height)
+        if selection && node.meta.focused
+          
+
+          selection.focus_id = node.uuid
           selection.pos.cursor_index = 0
           selection.pos.positions = nil
-          selection.cursor = [canvas.x + padding.left, top + padding.top, 3.5, size]
+          # p ["setting cursor to", canvas.y.round(2) + offset.round(2) + padding.top]
+          #           selection.geom!
+          # p ["before cursor", selection.cursor]
+          selection.state = :geom
+          selection.geom.modified = true
+          selection.offset_y = offset
+          selection.cursor = [canvas.x + padding.left, canvas.y.round(2) + offset.round(2), 3.5, size].dup
+          selection.pos!(false)
+          # p ["after cursor", content[0..20], selection.cursor]
         end
 
         yield canvas
