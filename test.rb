@@ -18,11 +18,11 @@ class Test < Hokusai::Block
     text_color: rgb(222,222,222);
     text_selection_color: rgb(79, 9, 66);
     text_selection_color_to: rgb(29,35,52);
-    size: 18;
+    size: 28;
     padding: padding(0.0, 0.0, 0.0, 0.0);
   }
   input {
-    size: 18;
+    size: 28;
     text_selection_color: rgb(199, 131, 187);
     text_selection_color_to: rgb(119, 141, 203);
   }
@@ -38,11 +38,11 @@ class Test < Hokusai::Block
   [template]
     vblock { background="22,22,22"}
       vblock { :height="50.0" ...bg }
-        empty
+        selectable { :height="50.0" }
+          input { :height="50.0" :model="foo" cursor="pointer" ...text }
       panel { @keypress="on_keypress" }
         selectable { :vertical="true" ...cursor }
           input { ...text :model="other" }
-          input { ...text ...bg @height_updated="okay" :model="content" }
 
   EOF
 

@@ -81,7 +81,6 @@ module Hokusai::Blocks
         # splicing in content
         y = start_top(canvas)
 
-        # off = selection&.offset_pos || 0
         stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, 0.0) do |string, extra|
           if w = user_font.measure_char(string, size)
             [w, size]
@@ -105,9 +104,8 @@ module Hokusai::Blocks
       end
       
       @cache = begin
-        cache = Hokusai::Util::WrapCache.new(0)#selection&.offset_pos || 0)
+        cache = Hokusai::Util::WrapCache.new
         y = start_top(canvas)
-        # off = selection&.offset_pos || 0
         stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
           if w = user_font.measure_char(string, size)
             [w, size]
@@ -184,11 +182,15 @@ module Hokusai::Blocks
       tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top))
 
       # token selection
-      if selection && (!selection.use_focus) || selection && (selection.use_focus && (node.meta.focused || node.uuid == selection.focus_id))
-        # set up for offset tracking
-        selection.clear if selection.focus_id != node.uuid
+      if selection && (node.meta.focused || node.uuid == selection.focus_id)
+        if selection.focus_id != node.uuid && !node.meta.focused
+          selection.clear
+        end
+
+        selection.cursor = nil unless node.meta.focused
         selection.focus_id = node.uuid
         selection.offset_y = offset
+
         if animate_selection && selection.geom?
           shader_begin do |command|
             command.fragment_shader = fshader

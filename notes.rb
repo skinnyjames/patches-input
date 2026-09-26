@@ -14,6 +14,41 @@ class Slot < Hokusai::Block
   EOF
 end
 
+class TodoItem < Hokusai::Block
+  template <<-EOF
+  [template]
+    vblock {
+      :height="content_height"
+    }
+      text {
+        color="222,222,222"
+        :content="content"
+        :size="size"
+        @height_updated="update_height"
+      }
+  EOF
+
+  computed! :content
+  computed! :size
+
+  uses(
+    vblock: Hokusai::Blocks::Vblock,
+    text: Hokusai::Blocks::Text
+  )
+
+  attr_accessor :content_height
+
+  def update_height(height)
+    node.meta.set_prop(:height, height)
+    @content_height = height
+  end
+
+  def initialize(**args)
+    super
+    @content_height = 0.0
+  end
+end
+
 class TodoList < Hokusai::Block
   style <<-EOF
   [style]
@@ -80,8 +115,17 @@ class TodoList < Hokusai::Block
         merge_styles "header"
 
         child(Hokusai::Blocks::Selectable) do
+          prop :selection_override do
+            selection
+          end
+    
           child(Hokusai::Blocks::Input) do
             merge_styles "formInput", "input"
+            
+            prop :color do
+              Hokusai::Color.new(222,222,222)
+            end
+
             prop :model do
               todo_form
             end
@@ -94,11 +138,21 @@ class TodoList < Hokusai::Block
           on :click do |event|
             p "click"
             todo_add(event)
+            selection.clear
           end
     
           child(Hokusai::Blocks::Text) do
             merge_styles "button"
           end
+        end
+      end
+
+      child(Hokusai::Blocks::Vblock) do
+        prop :height do
+          100.0
+        end
+        child(Hokusai::Blocks::Empty) do
+          
         end
       end
 
@@ -108,11 +162,13 @@ class TodoList < Hokusai::Block
         end
         
         child(Hokusai::Blocks::Selectable) do
-          each_child(Hokusai::Blocks::Text, :todos) do |todo|
-            merge_styles "text"
-
+          each_child(TodoItem, :todos) do |todo|
             prop :key do
               todo.value
+            end
+
+            prop :size do
+              22.0
             end
 
             prop :content do
@@ -128,12 +184,16 @@ class TodoList < Hokusai::Block
 
   def initialize(**args)
     @copy = false
-    @todos = %w[]
+    @todos = %w[one two three]
     super
   end
 
   def vertical
     true
+  end
+
+  def selection
+    @selection ||= Hokusai::Util::Selection.new
   end
 
   def todo_form

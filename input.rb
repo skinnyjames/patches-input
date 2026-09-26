@@ -86,14 +86,10 @@ class Hokusai::Blocks::Input < Hokusai::Block
   end
 
   def increment_cursor(selecting, times: 1)
-    # selection.pos!
-
     selection.pos.move :right, selecting, times 
   end
 
   def decrement_cursor(selecting, times: 1)
-    # selection.pos!
-
     selection.pos.move :left, selecting, times
   end
 
@@ -101,6 +97,14 @@ class Hokusai::Blocks::Input < Hokusai::Block
     return unless timer.elapsed(0.2)
 
     keypress_logic(event, :down)
+  end
+
+  def handle_keypress(event)
+    return if selection.pos.cursor_index.nil?
+    
+    keypress_logic(event)
+    
+    timer.reset
   end
 
   def keypress_logic(event, type = :pressed)
@@ -139,19 +143,10 @@ class Hokusai::Blocks::Input < Hokusai::Block
         selection.pos.positions = nil
         selection.geom.clear
         selection.pos.cursor_index = range.begin
-        # increment_cursor(false)
-      # DONE
       elsif selection.pos.cursor_index
         model.insert(insertidx, event.char)
         selection.pos.cursor_index += 1 unless idx.zero? && model.size == 1
       end
-
-
-      # why were we doing this?
-      # if selection.pos.positions.nil?
-      #   selection.action = :collect 
-      #   p ["collect from input"]
-      # end
     elsif event.symbol == :c && (event.ctrl || event.super)
       self.copy = true
     elsif event.symbol == :v && (event.ctrl || event.super)
@@ -179,8 +174,6 @@ class Hokusai::Blocks::Input < Hokusai::Block
         selection.pos.positions = nil
         selection.geom.clear
         selection.pos.cursor_index = range.last
-        # increment_cursor(false)
-      # DONE
       elsif selection.pos.cursor_index
         model.insert(insertidx, chr)
         selection.pos.cursor_index += tabsize unless idx.zero? && model.size == 1
@@ -193,7 +186,6 @@ class Hokusai::Blocks::Input < Hokusai::Block
         selection.pos.positions = nil
         selection.geom.clear
         selection.pos.cursor_index = range.begin + 1
-        # increment_cursor(false)
       elsif selection.pos.cursor_index
         model.insert(selection.pos.cursor_index + 1, "\n")
         increment_cursor(false)
@@ -220,19 +212,5 @@ class Hokusai::Blocks::Input < Hokusai::Block
     elsif event.symbol == :left && selection.pos.cursor_index > -1
       decrement_cursor(event.shift)
     end
-  end
-
-  #
-  # | 0 | 1 | 2 | 3 | 
-  #   a   b   c   d
-  #                 x - cursor
-  #               x - cursor index
-  #               x - insert index
-  def handle_keypress(event)
-    return if selection.pos.cursor_index.nil?
-    
-    keypress_logic(event)
-    
-    timer.reset
   end
 end

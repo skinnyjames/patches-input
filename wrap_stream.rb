@@ -119,8 +119,7 @@ module Hokusai::Util
 
     attr_accessor :offset_pos
 
-    def initialize(offset_pos = 0)
-      @offset_pos = offset_pos
+    def initialize
       @diff_y = 0.0
       @tokens = []
     end
@@ -143,7 +142,7 @@ module Hokusai::Util
         max = posrange.last
       end
 
-      range = (min - offset_pos)..(max - offset_pos)
+      range = (min)..(max)
       if range.begin > range.end
         range = range.end..range.begin
       end
@@ -211,7 +210,7 @@ module Hokusai::Util
       end
 
       tokens.each_with_index do |token, ti|
-        next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect
+        next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect || (required_range.include?(token.positions.first) && required_range.include?(token.positions.last))
 
         if (selector.action == :up || selector.action == :down) && (token.positions.first..token.positions.last).include?(selector.pos.cursor_index)
           selector.column ||= token.positions.index(selector.pos.cursor_index)
@@ -307,7 +306,6 @@ module Hokusai::Util
             end
           end
 
-          # if selector.action == :left && selector.selected(last_token_index + 1)
           # if we are currently selecting by geometry, we need to populate the widths
           # cursor, and cursor_index, so that we can switch over.
           if selector.geom? && selector.geom.selected(tx, ty, w, token.height)
@@ -332,28 +330,6 @@ module Hokusai::Util
             tw += w
           # we are now selecting by position.
           elsif selector.pos? && selector.pos.selected(token.positions[i])
-            # if we are selecting up and the token is the last one, we want to start there
-            # if selector.geom.resized
-            #   p ["no"]
-            #   if selector.geom.direction == :up && selector.pos.positions.last == token.positions[i]
-            #     # p ["1 up", tx, ty, selector.offset_y]
-            #     selector.geom.start_x = tx + w
-            #     selector.geom.start_y = ty + token.height #+ selector.offset_y
-            #   elsif selector.geom.direction == :up && selector.pos.positions.first == token.positions[i]
-            #     # p ["2 up", tx, ty]
-            #     selector.geom.stop_x = tx
-            #     selector.geom.stop_y = ty
-            #   elsif selector.geom.direction == :down && selector.pos.positions.first == token.positions[i]
-            #     # p ["3 up",tx, ty]
-            #     selector.geom.start_x = tx
-            #     selector.geom.start_y = ty + token.height
-            #   elsif selector.geom.direction == :down && selector.pos.positions.last == token.positions[i]
-            #     # p ["4 up", tx, ty]
-            #     selector.geom.stop_x = tx + w
-            #     selector.geom.stop_y = ty
-            #   end
-            # end
-
             if selector.pos.cursor_index == selector.pos.positions.first
               cursor ||= [tx, ty, 0.5, token.height]
               pcursor ||= token.positions[i]
@@ -382,14 +358,10 @@ module Hokusai::Util
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
             cursor = [tx, ty, 0.5, token.height]
             pcursor = selector.pos.cursor_index
-            # p ["wierd"]
-          # elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index - 1 == token.positions[i]
-          #   p ["set weird 2"]
-          #   cursor = [tx + w, ty, 0.5, token.height]
-          #   pcursor = selector.pos.cursor_index
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
-            # p ["set cursor", selector.pos.cursor_index]
-            
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index - 1 == token.positions[i]
+            cursor = [tx + w, ty, 0.5, token.height]
+            pcursor = selector.pos.cursor_index
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]            
             cursor = [tx + w, ty, 0.5, token.height]
             pcursor = selector.pos.cursor_index
             #selector.pos.offset += 1
@@ -403,10 +375,9 @@ module Hokusai::Util
             else
               pcursor ||= token.positions[i]
             end
-          # elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(tx, ty, token.width, token.height)
-          #   pcursor = token.positions[i].zero? ? 0 : token.positions[i]
-          #   cursor = [tx, ty + w, 0.5, token.height]
-            # p ["pcursor", pcursor, cursor]
+          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(token.x, ty, token.width, token.height)
+            pcursor = token.positions[i].zero? ? 0 : token.positions[i]
+            cursor = [tx, ty + w, 0.5, token.height]
           end
 
           # move the current x forward
@@ -424,7 +395,6 @@ module Hokusai::Util
 
       # we have cursors
       if pcursor
-        # p ["setting pcursor", pcursor, selector.pos.frozen?, selector.pos.cursor_index]
         selector.pos.cursor_index = pcursor unless selector.pos.frozen?
         selector.cursor = cursor
       end
