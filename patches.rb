@@ -11,7 +11,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
   computed :y, default: 0.0
   computed :show, default: false
   computed :speed, default: 0.5
-  computed :cursor_width, default: 2.0
+  computed :cursor_width, default: 5.0
   computed :cursor_height, default: 0.0
   computed :color, default: DEFAULT_COLOR, convert: Hokusai::Color
 
@@ -34,7 +34,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     end
   end
 
-  def render(canvas)    
+  def render(canvas)  
     if show
       draw do
         if @active
@@ -88,16 +88,16 @@ module Hokusai
     # Public: Is the pressed key printable?
     # 
     # Returns boolean
-    def printable?
+    def printable?(type = :pressed)
       [
-        :space, :tab, :apostrophe, :comma, :minus, :period,
-        :slash, :right_bracket, :left_bracket, :grave,
+        :space, :apostrophe, :comma, :minus, :period,
+        :slash, :right_bracket, :left_bracket, :grave, :equal,
         :zero, :one, :two, :three, :four, :five, :six, 
         :seven, :eight, :nine, :semicolon, 
         :a, :b, :c, :d, :e, :f, :g, :h,
         :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, 
         :s, :t, :u, :v, :w, :x, :y, :z,
-      ].include?(symbol)
+      ].include?(symbol(type))
     end
   end
 end
@@ -117,5 +117,100 @@ module Hokusai
     def reset
       @start = Hokusai.monotonic
     end
+  end
+end
+
+# Public: Measures it's children and emits the width and height
+class Hokusai::Blocks::Dynamic < Hokusai::Block
+  template <<~EOF
+    [template]
+      slot
+  EOF
+
+  computed :reverse, default: false
+  computed :vertical, default: true
+
+  def before_updated
+    width, height = compute_size
+
+    emit("size_updated", width, height)
+  end
+
+  def on_resize(_)
+    compute_size
+  end
+
+  def on_mounted
+    compute_size
+  end
+
+  def compute_size
+    h = 0.0
+    w = 0.0
+
+    if vertical
+      children.each do |block|
+        h += block.node.meta.get_prop?(:height)&.to_f || 0.0
+        w += block.node.meta.get_prop?(:width)&.to_f || 0.0
+      end
+    else
+      h = children.map {|block| block.node.meta.get_prop?(:height)&.to_f || 0.0 }.max
+    end
+
+    if @last && h < @last.height
+      h = @last.height
+    end
+
+    node.meta.set_prop(:height, h)
+
+    [w, h]
+  end
+
+  def render(canvas)
+    canvas.vertical = vertical
+    canvas.reverse = (reverse == true || reverse == "true")
+    @last = canvas
+
+    yield canvas
+  end
+end
+
+# Public: Starts a clipping region with everything
+#         inside being clipped to the canvas dimensions
+#         Last child should be [Hokusai::Blocks::ScissorEnd](/api/Hokusai/Blocks/ScissorEnd)
+#         
+# Examples
+# 
+#   template <<-EOF
+#   [template]
+#     scissor_begin
+#       more
+#         components
+#       scissor_end
+#   EOF
+class Hokusai::Blocks::ScissorBegin < Hokusai::Block
+  template <<~EOF
+  [template]
+    slot
+  EOF
+
+  inject :panel_top
+  inject :panel_offset
+  computed :offset, default: 0.0, convert: proc(&:to_f)
+  computed :auto, default: true
+
+  def off
+    panel_offset || offset
+  end
+
+  def render(canvas)
+    draw do
+      scissor_begin(canvas.x, canvas.y, canvas.width, canvas.height)
+    end
+
+    canvas.y -= off.dup if auto
+    canvas.offset_y = off
+
+    yield canvas
   end
 end
